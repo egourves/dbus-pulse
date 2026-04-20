@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="dbus-pulse@dev.gourves.net">
+  <schema id="org.gnome.shell.extensions.dbus-pulse"
+          path="/org/gnome/shell/extensions/dbus-pulse/">
+
+    <key name="bus-name" type="s">
+      <default>'com.github.maximbaz.YubikeyTouchDetector'</default>
+      <summary>DBus bus name</summary>
+      <description>Well-known name of the DBus service to watch on the session bus.</description>
+    </key>
+
+    <key name="object-path" type="s">
+      <default>'/com/github/maximbaz/YubikeyTouchDetector'</default>
+      <summary>DBus object path</summary>
+      <description>Object path exported by the DBus service.</description>
+    </key>
+
+    <key name="interface-name" type="s">
+      <default>'com.github.maximbaz.YubikeyTouchDetector'</default>
+      <summary>DBus interface name</summary>
+      <description>Interface on which the watched property is exposed.</description>
+    </key>
+
+    <key name="property-name" type="s">
+      <default>'GPGState'</default>
+      <summary>Property name</summary>
+      <description>Name of the property whose transitions drive the pulse.</description>
+    </key>
+
+    <key name="trigger-value" type="u">
+      <default>1</default>
+      <range min="0" max="4294967295"/>
+      <summary>Trigger value</summary>
+      <description>Unsigned integer value of the property that starts the pulse. Any other value stops it.</description>
+    </key>
+
+    <key name="border-color" type="s">
+      <default>'rgba(255, 200, 0, 0.95)'</default>
+      <summary>Border color</summary>
+      <description>CSS color used for the pulsing border (any valid CSS color string, e.g. #ff0000 or rgba(...)).</description>
+    </key>
+
+    <key name="border-thickness" type="u">
+      <default>8</default>
+      <range min="1" max="64"/>
+      <summary>Border thickness</summary>
+      <description>Thickness of the pulsing border in pixels.</description>
+    </key>
+
+    <key name="pulse-duration" type="u">
+      <default>700</default>
+      <range min="100" max="3000"/>
+      <summary>Pulse duration</summary>
+      <description>Duration of one fade half-cycle (high-to-low or low-to-high) in milliseconds.</description>
+    </key>
+
+  </schema>
+</schemalist>

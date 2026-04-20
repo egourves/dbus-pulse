@@ -1,0 +1,9 @@
+{
+  "uuid": "dbus-pulse@dev.gourves.net",
+  "name": "DBus Property Pulse",
+  "description": "Pulses a colored border on every monitor when a configurable DBus property transitions to a chosen trigger value. Defaults target yubikey-touch-detector.",
+  "url": "https://github.com/egourves/dbus-pulse",
+  "version": 1,
+  "shell-version": ["49"],
+  "settings-schema": "org.gnome.shell.extensions.dbus-pulse"
+}
