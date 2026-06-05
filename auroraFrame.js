@@ -73,8 +73,11 @@ class AuroraEffect extends Shell.GLSLEffect {
         this._uBreath = this.get_uniform_location('u_breath');
         // Exceptions inside vfunc_build_pipeline are swallowed at the C
         // boundary; this plain-JS guard makes the failure visible so the
-        // extension can fall back to the solid renderer.
-        if (!(this._uSize >= 0))
+        // extension can fall back to the solid renderer. Check every
+        // location: a missing one (-1) would make set_uniform_float a
+        // silent no-op and run the shader with wrong parameters.
+        const locations = [this._uSize, this._uGlowWidth, this._uFlowPhase, this._uBreath];
+        if (locations.some(u => !(u >= 0)))
             throw new Error('aurora GLSL uniforms unavailable (snippet not built?)');
     }
 
@@ -106,6 +109,7 @@ export class AuroraRenderer {
 
         this._frames = []; // [{actor, effect}]
         this._timeline = null;
+        this._newFrameId = 0;
         this._active = false;
         this._startUs = 0;
     }
@@ -135,6 +139,10 @@ export class AuroraRenderer {
         this._active = false;
 
         if (this._timeline) {
+            // Drop the handler explicitly: if Clutter retains the timeline
+            // internally, the closure would keep `this` alive past stop().
+            this._timeline.disconnect(this._newFrameId);
+            this._newFrameId = 0;
             this._timeline.stop();
             this._timeline = null;
         }
@@ -185,10 +193,19 @@ export class AuroraRenderer {
                 height: mon.height,
                 opacity: 255,
             });
-            const effect = new AuroraEffect();
-            actor.add_effect(effect);
-            effect.setGeometry(mon.width, mon.height, this._glowWidth);
-            effect.setPhase(0, 1); // deterministic bright start
+            let effect;
+            try {
+                effect = new AuroraEffect();
+                actor.add_effect(effect);
+                effect.setGeometry(mon.width, mon.height, this._glowWidth);
+                effect.setPhase(0, 1); // deterministic bright start
+            } catch (e) {
+                // Not yet in this._frames nor in the chrome, so the caller's
+                // stop(true) cleanup cannot reach this actor — destroy it
+                // here or it leaks (Clutter actors are not reliably GC'd).
+                actor.destroy();
+                throw e;
+            }
             Main.layoutManager.addTopChrome(actor);
             this._frames.push({actor, effect});
         }
@@ -208,7 +225,7 @@ export class AuroraRenderer {
             duration: 1000,
             repeat_count: -1,
         });
-        this._timeline.connect('new-frame', () => this._tick());
+        this._newFrameId = this._timeline.connect('new-frame', () => this._tick());
         this._timeline.start();
     }
 
