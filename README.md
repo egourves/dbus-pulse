@@ -1,8 +1,8 @@
 # DBus Property Pulse
 
 A GNOME Shell extension that lights up every monitor whenever a chosen DBus
-property transitions to a chosen trigger value — either as a flowing rainbow
-glow ("aurora", the default) or as a pulsing colored border ("solid"). The
+property transitions to a chosen trigger value — either as a pulsing colored
+border ("solid", the default) or as a flowing rainbow glow ("aurora"). The
 effect fades out when the property leaves that value. Out of the box it is
 configured to light up on a pending touch from `yubikey-touch-detector`, but
 every piece of the wiring — bus name, object path, interface, property,
@@ -38,14 +38,14 @@ window has one page with two groups:
   the unsigned integer trigger value that starts the pulse. Any value other
   than the trigger stops it.
 - **Appearance** — a **Style** selector with two renderings:
-  - **Aurora glow** (default) — a soft rainbow glow whose colors flow around
-    the screen edge while the glow breathes. Knobs: glow width (px), flow
+  - **Solid border** (default) — the original pulsing border. Knobs: CSS
+    color string (anything valid in GNOME Shell's CSS, e.g.
+    `rgba(255, 200, 0, 0.95)` or `#ff0000`), border thickness in pixels, and
+    the per-half-cycle pulse duration in milliseconds.
+  - **Aurora glow** — a soft rainbow glow whose colors flow around the
+    screen edge while the glow breathes. Knobs: glow width (px), flow
     duration (ms for one full lap), breathing duration (ms per
     bright-dim-bright cycle). The palette is fixed.
-  - **Solid border** — the original pulsing border. Knobs: CSS color string
-    (anything valid in GNOME Shell's CSS, e.g. `rgba(255, 200, 0, 0.95)` or
-    `#ff0000`), border thickness in pixels, and the per-half-cycle pulse
-    duration in milliseconds.
 
 Edits persist live via `GSettings`; the extension tears down its DBus proxy
 and rebuilds on every change, so there is no need to toggle it off and on.
@@ -61,8 +61,8 @@ yubikey-touch-detector -dbus
 ```
 
 With the detector running and this extension enabled, pending GPG touches
-light up the aurora glow (or your configured solid border) on every monitor
-until the key is tapped.
+light up the pulsing border (or the aurora glow, if selected) on every
+monitor until the key is tapped.
 
 To retarget it to another service — say, a hypothetical VPN daemon that
 exposes a `Connected` uint on `org.example.Vpn` — open the prefs and fill in

@@ -59,7 +59,7 @@
         <choice value='solid'/>
         <choice value='aurora'/>
       </choices>
-      <default>'aurora'</default>
+      <default>'solid'</default>
       <summary>Rendering style</summary>
       <description>How the pulse is drawn: 'solid' is a plain pulsing border, 'aurora' is a flowing rainbow glow.</description>
     </key>
