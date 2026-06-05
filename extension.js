@@ -1,13 +1,9 @@
-import St from 'gi://St';
-import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-const FADE_OUT_MS = 200;
-const OPACITY_MIN = 60;
-const OPACITY_MAX = 255;
+import {SolidRenderer} from './solidFrame.js';
+import {AuroraRenderer} from './auroraFrame.js';
 
 // Settings keys that affect the DBus subscription or visible styling.
 // Any change to these triggers a full teardown + rebuild.
@@ -17,9 +13,13 @@ const WATCHED_KEYS = [
     'interface-name',
     'property-name',
     'trigger-value',
+    'style',
     'border-color',
     'border-thickness',
     'pulse-duration',
+    'aurora-glow-width',
+    'aurora-flow-duration',
+    'aurora-breath-duration',
 ];
 
 export default class DBusPulseExtension extends Extension {
@@ -58,20 +58,14 @@ export default class DBusPulseExtension extends Extension {
         this._ifaceName = this._settings.get_string('interface-name');
         this._propName = this._settings.get_string('property-name');
         this._triggerValue = this._settings.get_uint('trigger-value');
-        const rawColor = this._settings.get_string('border-color');
-        this._borderColor = rawColor.trim() ? rawColor : 'white';
-        this._borderThickness = this._settings.get_uint('border-thickness');
-        this._pulseDuration = this._settings.get_uint('pulse-duration');
+
+        this._renderer = this._createRenderer();
+        this._pulseActive = false;
 
         this._proxy = null;
         this._proxyCancellable = new Gio.Cancellable();
         this._propsChangedId = 0;
         this._monitorsChangedId = 0;
-        this._frames = [];
-        this._pulsing = false;
-        this._stopping = false;
-        this._pulseTimeoutId = 0;
-        this._pulseHigh = true;
         this._lastValue = 0;
 
         Gio.DBusProxy.new_for_bus(
@@ -103,7 +97,7 @@ export default class DBusPulseExtension extends Extension {
                         const unpacked = changed.deep_unpack();
                         if (!(this._propName in unpacked))
                             return;
-                        // v1 assumption: the watched property is an unsigned integer. deep_unpack on the
+                        // The watched property is assumed to be an unsigned integer. deep_unpack on the
                         // inner GVariant returns a JS number (or BigInt for 64-bit), which _readIntLike normalizes.
                         const next = this._readIntLike(unpacked[this._propName]);
                         const prev = this._lastValue;
@@ -118,9 +112,11 @@ export default class DBusPulseExtension extends Extension {
 
                 this._monitorsChangedId = Main.layoutManager.connect('monitors-changed',
                     () => {
-                        if (this._pulsing) {
-                            this._removeFrames();
-                            this._addFrames();
+                        if (this._pulseActive) {
+                            this._renderer.stop(true);
+                            // Route through _startPulse so the hot-plug restart
+                            // gets the same solid fallback as the trigger path.
+                            this._startPulse();
                         }
                     });
 
@@ -147,13 +143,50 @@ export default class DBusPulseExtension extends Extension {
             this._propsChangedId = 0;
         }
 
-        if (this._pulseTimeoutId) {
-            GLib.source_remove(this._pulseTimeoutId);
-            this._pulseTimeoutId = 0;
-        }
-
         this._proxy = null;
-        this._frames = [];
+        this._renderer = null;
+    }
+
+    _createRenderer() {
+        if (this._settings.get_string('style') === 'aurora') {
+            return new AuroraRenderer({
+                glowWidth: this._settings.get_uint('aurora-glow-width'),
+                flowDuration: this._settings.get_uint('aurora-flow-duration'),
+                breathDuration: this._settings.get_uint('aurora-breath-duration'),
+            });
+        }
+        return this._createSolidRenderer();
+    }
+
+    _createSolidRenderer() {
+        const rawColor = this._settings.get_string('border-color');
+        return new SolidRenderer({
+            borderColor: rawColor.trim() ? rawColor : 'white',
+            borderThickness: this._settings.get_uint('border-thickness'),
+            pulseDuration: this._settings.get_uint('pulse-duration'),
+        });
+    }
+
+    _startPulse() {
+        this._pulseActive = true;
+        try {
+            this._renderer.start();
+        } catch (e) {
+            // This extension is a security signal (pending YubiKey touch);
+            // the alert must never silently disappear. If the aurora path
+            // fails (e.g. shader construction on exotic drivers), fall back
+            // to the plain border.
+            logError(e, 'dbus-pulse: renderer failed to start, falling back to solid border');
+            this._renderer.stop(true);
+            this._renderer = this._createSolidRenderer();
+            this._renderer.start();
+        }
+    }
+
+    _stopPulse(immediate = false) {
+        this._pulseActive = false;
+        if (this._renderer)
+            this._renderer.stop(immediate);
     }
 
     // Accepts any integer-ish GVariant (uint16/uint32/uint64/int16/int32/int64).
@@ -169,118 +202,5 @@ export default class DBusPulseExtension extends Extension {
             // fall through
         }
         return 0;
-    }
-
-    _addFrames() {
-        for (const mon of Main.layoutManager.monitors) {
-            const frame = new St.Widget({
-                reactive: false,
-                can_focus: false,
-                track_hover: false,
-                style: `border: ${this._borderThickness}px solid ${this._borderColor};`,
-                x: mon.x,
-                y: mon.y,
-                width: mon.width,
-                height: mon.height,
-                opacity: OPACITY_MAX,
-            });
-            Main.layoutManager.addTopChrome(frame);
-            this._frames.push(frame);
-        }
-    }
-
-    _removeFrames() {
-        for (const frame of this._frames) {
-            Main.layoutManager.removeChrome(frame);
-            frame.destroy();
-        }
-        this._frames = [];
-    }
-
-    _startPulse() {
-        this._stopping = false;
-
-        if (this._pulsing) {
-            for (const frame of this._frames) {
-                frame.remove_all_transitions();
-                frame.opacity = OPACITY_MAX;
-            }
-            return;
-        }
-
-        this._pulsing = true;
-        this._addFrames();
-        this._pulseHigh = true;
-
-        const tick = () => {
-            if (!this._pulsing || this._stopping)
-                return GLib.SOURCE_REMOVE;
-
-            const target = this._pulseHigh ? OPACITY_MIN : OPACITY_MAX;
-            this._pulseHigh = !this._pulseHigh;
-            for (const frame of this._frames) {
-                frame.ease({
-                    opacity: target,
-                    duration: this._pulseDuration,
-                    mode: Clutter.AnimationMode.EASE_IN_OUT_QUAD,
-                });
-            }
-            return GLib.SOURCE_CONTINUE;
-        };
-
-        tick();
-        this._pulseTimeoutId = GLib.timeout_add(
-            GLib.PRIORITY_DEFAULT,
-            this._pulseDuration,
-            tick,
-        );
-    }
-
-    _stopPulse(immediate = false) {
-        if (!this._pulsing)
-            return;
-
-        this._stopping = true;
-
-        if (this._pulseTimeoutId) {
-            GLib.source_remove(this._pulseTimeoutId);
-            this._pulseTimeoutId = 0;
-        }
-
-        const frames = this._frames;
-        this._frames = [];
-        this._pulsing = false;
-
-        if (immediate) {
-            for (const frame of frames) {
-                frame.remove_all_transitions();
-                Main.layoutManager.removeChrome(frame);
-                frame.destroy();
-            }
-            this._stopping = false;
-            return;
-        }
-
-        let remaining = frames.length;
-        if (remaining === 0) {
-            this._stopping = false;
-            return;
-        }
-
-        for (const frame of frames) {
-            frame.remove_all_transitions();
-            frame.ease({
-                opacity: 0,
-                duration: FADE_OUT_MS,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                onComplete: () => {
-                    Main.layoutManager.removeChrome(frame);
-                    frame.destroy();
-                    remaining -= 1;
-                    if (remaining === 0)
-                        this._stopping = false;
-                },
-            });
-        }
     }
 }
