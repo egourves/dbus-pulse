@@ -54,5 +54,36 @@
       <description>Duration of one fade half-cycle (high-to-low or low-to-high) in milliseconds.</description>
     </key>
 
+    <key name="style" type="s">
+      <choices>
+        <choice value='solid'/>
+        <choice value='aurora'/>
+      </choices>
+      <default>'solid'</default>
+      <summary>Rendering style</summary>
+      <description>How the pulse is drawn: 'solid' is a plain pulsing border, 'aurora' is a flowing rainbow glow.</description>
+    </key>
+
+    <key name="aurora-glow-width" type="u">
+      <default>80</default>
+      <range min="16" max="400"/>
+      <summary>Aurora glow width</summary>
+      <description>Inward extent of the aurora glow falloff, in pixels.</description>
+    </key>
+
+    <key name="aurora-flow-duration" type="u">
+      <default>5000</default>
+      <range min="1000" max="30000"/>
+      <summary>Aurora flow duration</summary>
+      <description>Time in milliseconds for the colors to travel once around the screen.</description>
+    </key>
+
+    <key name="aurora-breath-duration" type="u">
+      <default>2400</default>
+      <range min="500" max="10000"/>
+      <summary>Aurora breathing duration</summary>
+      <description>Duration in milliseconds of one full bright-dim-bright breathing cycle.</description>
+    </key>
+
   </schema>
 </schemalist>

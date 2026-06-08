@@ -63,9 +63,29 @@ export default class DBusPulsePreferences extends ExtensionPreferences {
     _buildAppearanceGroup(page, settings) {
         const group = new Adw.PreferencesGroup({
             title: _('Appearance'),
-            description: _('How the border looks and how fast it pulses.'),
+            description: _('How the pulse looks. Knobs below apply to the selected style.'),
         });
         page.add(group);
+
+        const STYLES = ['solid', 'aurora'];
+        const styleRow = new Adw.ComboRow({
+            title: _('Style'),
+            model: Gtk.StringList.new([_('Solid border'), _('Aurora glow')]),
+        });
+        const syncSelected = () => {
+            const idx = Math.max(0, STYLES.indexOf(settings.get_string('style')));
+            if (styleRow.selected !== idx)
+                styleRow.selected = idx;
+        };
+        syncSelected();
+        styleRow.connect('notify::selected', () => {
+            settings.set_string('style', STYLES[styleRow.selected]);
+        });
+        // Follow external changes (dconf, another prefs window) too.
+        settings.connect('changed::style', syncSelected);
+        group.add(styleRow);
+
+        // --- Solid border rows ---
 
         // CSS color string — kept as an entry row so users can paste rgba(), #rrggbb, etc.
         // A Gtk.ColorDialogButton would be nicer but wouldn't round-trip arbitrary CSS.
@@ -100,5 +120,62 @@ export default class DBusPulsePreferences extends ExtensionPreferences {
         });
         settings.bind('pulse-duration', durationAdjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
         group.add(durationRow);
+
+        // --- Aurora glow rows ---
+
+        const glowWidthAdjustment = new Gtk.Adjustment({
+            lower: 16,
+            upper: 400,
+            step_increment: 4,
+            value: settings.get_uint('aurora-glow-width'),
+        });
+        const glowWidthRow = new Adw.SpinRow({
+            title: _('Glow width (px)'),
+            subtitle: _('How far the glow reaches into the screen.'),
+            adjustment: glowWidthAdjustment,
+        });
+        settings.bind('aurora-glow-width', glowWidthAdjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+        group.add(glowWidthRow);
+
+        const flowAdjustment = new Gtk.Adjustment({
+            lower: 1000,
+            upper: 30000,
+            step_increment: 250,
+            value: settings.get_uint('aurora-flow-duration'),
+        });
+        const flowRow = new Adw.SpinRow({
+            title: _('Flow duration (ms)'),
+            subtitle: _('Time for the colors to travel once around the screen.'),
+            adjustment: flowAdjustment,
+        });
+        settings.bind('aurora-flow-duration', flowAdjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+        group.add(flowRow);
+
+        const breathAdjustment = new Gtk.Adjustment({
+            lower: 500,
+            upper: 10000,
+            step_increment: 100,
+            value: settings.get_uint('aurora-breath-duration'),
+        });
+        const breathRow = new Adw.SpinRow({
+            title: _('Breathing duration (ms)'),
+            subtitle: _('One full bright-dim-bright cycle.'),
+            adjustment: breathAdjustment,
+        });
+        settings.bind('aurora-breath-duration', breathAdjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+        group.add(breathRow);
+
+        // Only show the rows that apply to the selected style.
+        const solidRows = [colorRow, thicknessRow, durationRow];
+        const auroraRows = [glowWidthRow, flowRow, breathRow];
+        const updateVisibility = () => {
+            const aurora = settings.get_string('style') === 'aurora';
+            for (const row of solidRows)
+                row.visible = !aurora;
+            for (const row of auroraRows)
+                row.visible = aurora;
+        };
+        settings.connect('changed::style', updateVisibility);
+        updateVisibility();
     }
 }
