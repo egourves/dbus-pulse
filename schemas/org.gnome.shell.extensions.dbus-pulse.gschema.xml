@@ -3,6 +3,35 @@
   <schema id="org.gnome.shell.extensions.dbus-pulse"
           path="/org/gnome/shell/extensions/dbus-pulse/">
 
+    <key name="signals" type="s">
+      <default>'[]'</default>
+      <summary>Watched signals (JSON)</summary>
+      <description>
+        JSON array of watched-signal entries. Array order is priority:
+        index 0 is highest priority. Each element is an object with keys:
+        id (string), busName (string), objectPath (string),
+        interfaceName (string), propertyName (string),
+        triggerValue (uint number), style ('solid' | 'aurora'),
+        borderColor (CSS string), borderThickness (uint px),
+        pulseDuration (uint ms), auroraGlowWidth (uint px),
+        auroraFlowDuration (uint ms), auroraBreathDuration (uint ms).
+        When empty, the extension seeds one entry from the legacy flat
+        keys below (see the 'migrated' flag).
+      </description>
+    </key>
+
+    <key name="migrated" type="b">
+      <default>false</default>
+      <summary>Legacy config migrated</summary>
+      <description>
+        Set to true once the legacy flat keys have been folded into the
+        'signals' array. One-shot; guards the seeding step in enable().
+      </description>
+    </key>
+
+    <!-- Legacy flat keys below are retained only as the one-time migration
+         source into 'signals'. They are no longer read after migration. -->
+
     <key name="bus-name" type="s">
       <default>'com.github.maximbaz.YubikeyTouchDetector'</default>
       <summary>DBus bus name</summary>
