@@ -60,8 +60,9 @@ float alpha = clamp(glow * 0.85 + rim * 0.9, 0.0, 1.0) * u_breath;
 cogl_color_out = vec4(color * alpha, alpha); // premultiplied
 `;
 
-export const AuroraEffect = GObject.registerClass(
-class AuroraEffect extends Shell.GLSLEffect {
+// GNOME 49/50. setUniform() is the API both effect classes share.
+const registerGLSLEffect = () => GObject.registerClass(
+class AuroraGLSLEffect extends Shell.GLSLEffect {
     _init(params) {
         super._init(params);
         // Look uniforms up only after construction: the effect's Cogl
@@ -87,17 +88,43 @@ class AuroraEffect extends Shell.GLSLEffect {
         this.add_glsl_snippet(Cogl.SnippetHook.FRAGMENT, DECLARATIONS, CODE, false);
     }
 
-    setGeometry(width, height, glowWidth) {
-        this.set_uniform_float(this._uSize, 2, [width, height]);
-        this.set_uniform_float(this._uGlowWidth, 1, [glowWidth]);
-    }
-
-    setPhase(flowPhase, breath) {
-        this.set_uniform_float(this._uFlowPhase, 1, [flowPhase]);
-        this.set_uniform_float(this._uBreath, 1, [breath]);
-        this.queue_repaint();
+    setUniform(name, values) {
+        const location = {
+            u_size: this._uSize,
+            u_glow_width: this._uGlowWidth,
+            u_flow_phase: this._uFlowPhase,
+            u_breath: this._uBreath,
+        }[name];
+        this.set_uniform_float(location, values.length, values);
     }
 });
+
+// GNOME 51+, where Shell.GLSLEffect is gone.
+const registerShaderEffect = () => GObject.registerClass(
+class AuroraShaderEffect extends Clutter.ShaderEffect {
+    vfunc_get_static_snippet() {
+        const snippet = Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, DECLARATIONS, null);
+        snippet.set_replace(CODE);
+        return snippet;
+    }
+
+    setUniform(name, values) {
+        this.set_uniform_float(name, values.length, values);
+    }
+});
+
+const AuroraEffect = Shell.GLSLEffect ? registerGLSLEffect() : registerShaderEffect();
+
+function setGeometry(effect, width, height, glowWidth) {
+    effect.setUniform('u_size', [width, height]);
+    effect.setUniform('u_glow_width', [glowWidth]);
+}
+
+function setPhase(effect, flowPhase, breath) {
+    effect.setUniform('u_flow_phase', [flowPhase]);
+    effect.setUniform('u_breath', [breath]);
+    effect.queue_repaint();
+}
 
 // Flowing rainbow soft glow on every monitor ("Apple Intelligence" style).
 // Same contract as SolidRenderer: start() / stop(immediate).
@@ -197,8 +224,8 @@ export class AuroraRenderer {
             try {
                 effect = new AuroraEffect();
                 actor.add_effect(effect);
-                effect.setGeometry(mon.width, mon.height, this._glowWidth);
-                effect.setPhase(0, 1); // deterministic bright start
+                setGeometry(effect, mon.width, mon.height, this._glowWidth);
+                setPhase(effect, 0, 1); // deterministic bright start
             } catch (e) {
                 // Not yet in this._frames nor in the chrome, so the caller's
                 // stop(true) cleanup cannot reach this actor — destroy it
@@ -236,6 +263,6 @@ export class AuroraRenderer {
         const breath = BREATH_MIN +
             (1 - BREATH_MIN) * (0.5 + 0.5 * Math.cos(2 * Math.PI * breathT));
         for (const {effect} of this._frames)
-            effect.setPhase(flowPhase, breath);
+            setPhase(effect, flowPhase, breath);
     }
 }
