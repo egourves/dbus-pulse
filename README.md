@@ -15,7 +15,7 @@ through a preferences UI.
 
 ## Requirements
 
-- GNOME Shell 49 or 50
+- GNOME Shell 49, 50 or 51
 - A DBus session-bus service that exports the property you want to watch and
   emits `org.freedesktop.DBus.Properties.PropertiesChanged` when it changes.
 - The property must be an unsigned integer (only uint types are supported).
@@ -94,7 +94,8 @@ on screen at a time.
 When a signal is shown it adds a full-screen frame on every monitor. In
 **solid** style the frame is an `St.Widget` border whose opacity eases
 between two levels. In **aurora** style the frame carries a
-`Shell.GLSLEffect` fragment shader computing a conic rainbow gradient with a
+`Shell.GLSLEffect` (GNOME 49/50) or `Clutter.ShaderEffect`
+(GNOME 51+) fragment shader computing a conic rainbow gradient with a
 soft distance-to-edge falloff, advanced by a repeating `Clutter.Timeline`;
 if the aurora renderer fails to start, the extension falls back to the solid
 border so the alert is never lost. When no watched signal is in its trigger
